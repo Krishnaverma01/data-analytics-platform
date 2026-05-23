@@ -18,6 +18,12 @@ const App = {
         this.bindEvents();
         this.setupNavigation();
         this.setupDragDrop();
+        // Show info popup
+        const modal = document.getElementById('infoModal');
+        const okBtn = document.getElementById('modalOk');
+        if (modal && okBtn) {
+            okBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+        }
     },
 
     // ============ EVENT BINDING ============
