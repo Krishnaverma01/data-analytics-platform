@@ -235,44 +235,58 @@ class DataAnalyzer:
 
     def detect_anomalies(self):
         """Detect anomalies using Isolation Forest."""
-        if len(self.numeric_cols) < 1:
-            return {"error": "Need at least 1 numeric column for anomaly detection"}
+        try:
+            if len(self.numeric_cols) < 1:
+                return {"error": "Need at least 1 numeric column for anomaly detection"}
 
-        data = self.df[self.numeric_cols].dropna()
-        if len(data) < 10:
-            return {"error": "Need at least 10 rows for anomaly detection"}
+            data = self.df[self.numeric_cols].dropna()
+            if len(data) < 10:
+                return {"error": "Need at least 10 rows for anomaly detection"}
 
-        contamination = min(0.1, max(0.01, 5 / len(data)))
-        iso_forest = IsolationForest(contamination=contamination, random_state=42, n_estimators=100)
-        predictions = iso_forest.fit_predict(data)
-        anomaly_scores = iso_forest.decision_function(data)
+            # Limit data size to prevent OOM on free hosting (512MB RAM)
+            max_rows = 5000
+            if len(data) > max_rows:
+                data = data.sample(n=max_rows, random_state=42)
 
-        anomaly_mask = predictions == -1
-        anomalies = data[anomaly_mask].copy()
-        normal = data[~anomaly_mask].copy()
+            contamination = min(0.1, max(0.01, 5 / len(data)))
+            iso_forest = IsolationForest(
+                contamination=contamination,
+                random_state=42,
+                n_estimators=50,
+                max_samples='auto',
+                n_jobs=1
+            )
+            predictions = iso_forest.fit_predict(data)
+            anomaly_scores = iso_forest.decision_function(data)
 
-        anomaly_indices = data.index[anomaly_mask].tolist()
+            anomaly_mask = predictions == -1
+            anomalies = data[anomaly_mask].copy()
+            normal = data[~anomaly_mask].copy()
 
-        # Analyze what makes anomalies different
-        anomaly_profile = {}
-        if len(anomalies) > 0:
-            for col in self.numeric_cols:
-                anomaly_profile[col] = {
-                    "normal_mean": round(float(normal[col].mean()), 4),
-                    "anomaly_mean": round(float(anomalies[col].mean()), 4),
-                    "deviation_pct": round(float(
-                        abs(anomalies[col].mean() - normal[col].mean()) / max(abs(normal[col].mean()), 1e-10) * 100
-                    ), 2)
-                }
+            anomaly_indices = data.index[anomaly_mask].tolist()
 
-        return {
-            "total_anomalies": int(anomaly_mask.sum()),
-            "anomaly_percentage": round(float(anomaly_mask.mean() * 100), 2),
-            "anomaly_indices": anomaly_indices[:100],
-            "anomaly_scores": [round(float(s), 4) for s in anomaly_scores[:100]],
-            "anomaly_profile": anomaly_profile,
-            "insights": self._generate_anomaly_insights(anomaly_mask.sum(), len(data), anomaly_profile)
-        }
+            # Analyze what makes anomalies different
+            anomaly_profile = {}
+            if len(anomalies) > 0:
+                for col in self.numeric_cols:
+                    anomaly_profile[col] = {
+                        "normal_mean": round(float(normal[col].mean()), 4),
+                        "anomaly_mean": round(float(anomalies[col].mean()), 4),
+                        "deviation_pct": round(float(
+                            abs(anomalies[col].mean() - normal[col].mean()) / max(abs(normal[col].mean()), 1e-10) * 100
+                        ), 2)
+                    }
+
+            return {
+                "total_anomalies": int(anomaly_mask.sum()),
+                "anomaly_percentage": round(float(anomaly_mask.mean() * 100), 2),
+                "anomaly_indices": anomaly_indices[:100],
+                "anomaly_scores": [round(float(s), 4) for s in anomaly_scores[:100]],
+                "anomaly_profile": anomaly_profile,
+                "insights": self._generate_anomaly_insights(anomaly_mask.sum(), len(data), anomaly_profile)
+            }
+        except Exception as e:
+            return {"error": f"Anomaly detection skipped: {str(e)}"}
 
     def _generate_anomaly_insights(self, n_anomalies, total, profile):
         insights = []
@@ -885,6 +899,325 @@ class DataAnalyzer:
             top_features = sorted(means.items(), key=lambda x: abs(x[1]), reverse=True)[:3]
             feature_desc = ", ".join([f"{f}={m}" for f, m in top_features])
             insights.append(f"{cid}: {size} records, characterized by {feature_desc}")
+        return insights
+
+    def get_business_insights(self):
+        """Generate practical business insights anyone can understand."""
+        insights = {
+            "summary": [],
+            "top_items": {},
+            "trends": {},
+            "comparisons": {},
+            "key_metrics": {},
+            "recommendations": []
+        }
+
+        # ============ AUTO-DETECT BUSINESS COLUMNS ============
+        money_keywords = ['revenue', 'sales', 'price', 'cost', 'profit', 'amount', 'total',
+                          'payment', 'income', 'spend', 'spending', 'value', 'salary', 'wage',
+                          'fee', 'discount', 'margin', 'turnover', 'bill', 'balance']
+        quantity_keywords = ['quantity', 'qty', 'count', 'units', 'volume', 'num', 'number',
+                             'stock', 'order', 'orders', 'items', 'pieces', 'amount']
+        product_keywords = ['product', 'item', 'category', 'type', 'brand', 'model', 'sku',
+                            'description', 'name', 'title', 'material', 'variant', 'sub_category',
+                            'sub_category']
+        customer_keywords = ['customer', 'client', 'buyer', 'user', 'member', 'account',
+                             'company', 'supplier', 'vendor', 'store', 'region', 'city',
+                             'country', 'state', 'location', 'branch', 'dealer']
+        date_keywords = ['date', 'time', 'year', 'month', 'week', 'day', 'period',
+                         'created', 'ordered', 'timestamp']
+
+        def _find_col(keywords, col_list):
+            for col in col_list:
+                col_lower = col.lower().replace('_', ' ').replace('-', ' ')
+                for kw in keywords:
+                    if kw in col_lower:
+                        return col
+            return None
+
+        money_col = _find_col(money_keywords, self.numeric_cols)
+        qty_col = _find_col(quantity_keywords, self.numeric_cols)
+        product_col = _find_col(product_keywords, self.categorical_cols)
+        customer_col = _find_col(customer_keywords, self.categorical_cols)
+        date_col = _find_col(date_keywords, self.datetime_cols + self.categorical_cols)
+
+        # ============ OVERALL SUMMARY ============
+        row_count = len(self.df)
+        insights["summary"].append(f"Your dataset has {row_count:,} records with {len(self.df.columns)} data fields.")
+
+        if money_col:
+            total = self.df[money_col].sum()
+            avg = self.df[money_col].mean()
+            insights["summary"].append(f"Total {money_col.title()}: {total:,.2f}")
+            insights["key_metrics"]["total_revenue"] = round(float(total), 2)
+            insights["key_metrics"]["average_revenue"] = round(float(avg), 2)
+
+        if product_col:
+            n_products = self.df[product_col].nunique()
+            insights["summary"].append(f"You have {n_products} unique {product_col.lower()} entries.")
+
+        if customer_col:
+            n_customers = self.df[customer_col].nunique()
+            insights["summary"].append(f"You have {n_customers} unique {customer_col.lower()} entries.")
+
+        # ============ TOP PRODUCTS / ITEMS ============
+        if product_col and money_col:
+            product_data = self.df.groupby(product_col)[money_col].agg(['sum', 'mean', 'count']).reset_index()
+            product_data.columns = [product_col, 'total', 'average', 'count']
+            product_data = product_data.sort_values('total', ascending=False)
+
+            top_products = []
+            for _, row in product_data.head(10).iterrows():
+                pct = (row['total'] / self.df[money_col].sum()) * 100
+                top_products.append({
+                    "name": str(row[product_col]),
+                    "total": round(float(row['total']), 2),
+                    "average": round(float(row['average']), 2),
+                    "count": int(row['count']),
+                    "percentage": round(float(pct), 1)
+                })
+            insights["top_items"]["by_revenue"] = top_products
+
+            # Insight text
+            if top_products:
+                top1 = top_products[0]
+                insights["recommendations"].append(
+                    f"Top performer: '{top1['name']}' generates {top1['percentage']}% of total {money_col.lower()} "
+                    f"({top1['total']:,.2f}) with {top1['count']} transactions."
+                )
+                if len(top_products) >= 3:
+                    top3_pct = sum(p['percentage'] for p in top_products[:3])
+                    insights["recommendations"].append(
+                        f"Your top 3 {product_col.lower()}s account for {top3_pct:.1f}% of all {money_col.lower()}."
+                    )
+
+        elif product_col and qty_col:
+            product_data = self.df.groupby(product_col)[qty_col].agg(['sum', 'count']).reset_index()
+            product_data.columns = [product_col, 'total_qty', 'transactions']
+            product_data = product_data.sort_values('total_qty', ascending=False)
+
+            top_products = []
+            for _, row in product_data.head(10).iterrows():
+                top_products.append({
+                    "name": str(row[product_col]),
+                    "quantity": round(float(row['total_qty']), 2),
+                    "transactions": int(row['transactions'])
+                })
+            insights["top_items"]["by_quantity"] = top_products
+
+        elif product_col:
+            product_counts = self.df[product_col].value_counts().head(10)
+            insights["top_items"]["by_frequency"] = [
+                {"name": str(k), "count": int(v),
+                 "percentage": round((v / len(self.df)) * 100, 1)}
+                for k, v in product_counts.items()
+            ]
+
+        # ============ TOP CUSTOMERS / BUYERS ============
+        if customer_col and money_col:
+            customer_data = self.df.groupby(customer_col)[money_col].agg(['sum', 'mean', 'count']).reset_index()
+            customer_data.columns = [customer_col, 'total', 'average', 'count']
+            customer_data = customer_data.sort_values('total', ascending=False)
+
+            top_customers = []
+            for _, row in customer_data.head(10).iterrows():
+                pct = (row['total'] / self.df[money_col].sum()) * 100
+                top_customers.append({
+                    "name": str(row[customer_col]),
+                    "total": round(float(row['total']), 2),
+                    "average": round(float(row['average']), 2),
+                    "count": int(row['count']),
+                    "percentage": round(float(pct), 1)
+                })
+            insights["top_items"]["by_customer"] = top_customers
+
+            if top_customers:
+                top_c = top_customers[0]
+                insights["recommendations"].append(
+                    f"Biggest buyer: '{top_c['name']}' has spent {top_c['total']:,.2f} "
+                    f"across {top_c['count']} orders ({top_c['percentage']}% of total)."
+                )
+
+        elif customer_col:
+            customer_counts = self.df[customer_col].value_counts().head(10)
+            insights["top_items"]["by_customer_freq"] = [
+                {"name": str(k), "count": int(v),
+                 "percentage": round((v / len(self.df)) * 100, 1)}
+                for k, v in customer_counts.items()
+            ]
+
+        # ============ TRENDS (OVER TIME) ============
+        if date_col and money_col:
+            try:
+                df_copy = self.df.copy()
+                df_copy[date_col] = pd.to_datetime(df_copy[date_col], errors='coerce')
+                df_copy = df_copy.dropna(subset=[date_col])
+                df_copy = df_copy.sort_values(date_col)
+
+                # Determine time grouping
+                date_range = (df_copy[date_col].max() - df_copy[date_col].min()).days
+                if date_range > 365:
+                    group_col = df_copy[date_col].dt.to_period('M').astype(str)
+                    period_label = "Monthly"
+                elif date_range > 60:
+                    group_col = df_copy[date_col].dt.to_period('W').astype(str)
+                    period_label = "Weekly"
+                else:
+                    group_col = df_copy[date_col].dt.date.astype(str)
+                    period_label = "Daily"
+
+                trend_data = df_copy.groupby(group_col)[money_col].sum().reset_index()
+                trend_data.columns = ['period', 'total']
+
+                # Calculate trend direction
+                if len(trend_data) >= 3:
+                    first_half = trend_data['total'].iloc[:len(trend_data)//2].mean()
+                    second_half = trend_data['total'].iloc[len(trend_data)//2:].mean()
+                    change_pct = ((second_half - first_half) / max(abs(first_half), 1)) * 100
+
+                    if change_pct > 5:
+                        trend_dir = "increasing"
+                        trend_emoji = "Up"
+                    elif change_pct < -5:
+                        trend_dir = "decreasing"
+                        trend_emoji = "Down"
+                    else:
+                        trend_dir = "stable"
+                        trend_emoji = "Stable"
+
+                    insights["trends"]["direction"] = trend_dir
+                    insights["trends"]["change_percent"] = round(float(change_pct), 1)
+                    insights["recommendations"].append(
+                        f"{money_col.title()} is {trend_dir} over time "
+                        f"({'+'if change_pct > 0 else ''}{change_pct:.1f}% change from first half to second half)."
+                    )
+
+                insights["trends"]["data"] = {
+                    "labels": [str(p) for p in trend_data['period'].tolist()[-20:]],
+                    "values": [round(float(v), 2) for v in trend_data['total'].tolist()[-20:]],
+                    "period_label": period_label
+                }
+
+                # Best and worst periods
+                best_period = trend_data.loc[trend_data['total'].idxmax()]
+                worst_period = trend_data.loc[trend_data['total'].idxmin()]
+                insights["trends"]["best_period"] = {
+                    "period": str(best_period['period']),
+                    "value": round(float(best_period['total']), 2)
+                }
+                insights["trends"]["worst_period"] = {
+                    "period": str(worst_period['period']),
+                    "value": round(float(worst_period['total']), 2)
+                }
+                insights["recommendations"].append(
+                    f"Best {period_label.lower()}: {best_period['period']} "
+                    f"({best_period['total']:,.2f}). Worst: {worst_period['period']} ({worst_period['total']:,.2f})."
+                )
+
+            except Exception:
+                pass
+
+        elif date_col and qty_col:
+            try:
+                df_copy = self.df.copy()
+                df_copy[date_col] = pd.to_datetime(df_copy[date_col], errors='coerce')
+                df_copy = df_copy.dropna(subset=[date_col])
+                df_copy = df_copy.sort_values(date_col)
+
+                date_range = (df_copy[date_col].max() - df_copy[date_col].min()).days
+                if date_range > 365:
+                    group_col = df_copy[date_col].dt.to_period('M').astype(str)
+                    period_label = "Monthly"
+                else:
+                    group_col = df_copy[date_col].dt.to_period('W').astype(str)
+                    period_label = "Weekly"
+
+                trend_data = df_copy.groupby(group_col)[qty_col].sum().reset_index()
+                trend_data.columns = ['period', 'total']
+
+                if len(trend_data) >= 3:
+                    first_half = trend_data['total'].iloc[:len(trend_data)//2].mean()
+                    second_half = trend_data['total'].iloc[len(trend_data)//2:].mean()
+                    change_pct = ((second_half - first_half) / max(abs(first_half), 1)) * 100
+
+                    trend_dir = "increasing" if change_pct > 5 else "decreasing" if change_pct < -5 else "stable"
+                    insights["trends"]["direction"] = trend_dir
+                    insights["trends"]["change_percent"] = round(float(change_pct), 1)
+
+                insights["trends"]["data"] = {
+                    "labels": [str(p) for p in trend_data['period'].tolist()[-20:]],
+                    "values": [round(float(v), 2) for v in trend_data['total'].tolist()[-20:]],
+                    "period_label": period_label
+                }
+            except Exception:
+                pass
+
+        # ============ CATEGORY COMPARISONS ============
+        if product_col and money_col:
+            # Revenue share pie data
+            cat_data = self.df.groupby(product_col)[money_col].sum().sort_values(ascending=False)
+            total = cat_data.sum()
+            comparisons = []
+            others_total = 0
+            for i, (name, value) in enumerate(cat_data.items()):
+                if i < 8:
+                    comparisons.append({
+                        "name": str(name),
+                        "value": round(float(value), 2),
+                        "percentage": round(float((value / total) * 100), 1)
+                    })
+                else:
+                    others_total += value
+            if others_total > 0:
+                comparisons.append({
+                    "name": "Others",
+                    "value": round(float(others_total), 2),
+                    "percentage": round(float((others_total / total) * 100), 1)
+                })
+            insights["comparisons"]["revenue_share"] = comparisons
+
+        elif product_col:
+            cat_counts = self.df[product_col].value_counts().head(10)
+            total = cat_counts.sum()
+            insights["comparisons"]["category_share"] = [
+                {"name": str(k), "value": int(v),
+                 "percentage": round((v / total) * 100, 1)}
+                for k, v in cat_counts.items()
+            ]
+
+        # ============ GENERIC NUMERIC INSIGHTS (if no business columns detected) ============
+        if not product_col and not customer_col and self.numeric_cols:
+            # Top values for each numeric column
+            for col in self.numeric_cols[:5]:
+                col_data = self.df[col].dropna().sort_values(ascending=False)
+                insights["key_metrics"][col] = {
+                    "total": round(float(col_data.sum()), 2),
+                    "average": round(float(col_data.mean()), 2),
+                    "highest": round(float(col_data.iloc[0]), 2) if len(col_data) > 0 else 0,
+                    "lowest": round(float(col_data.iloc[-1]), 2) if len(col_data) > 0 else 0,
+                }
+
+        # ============ DETECTED COLUMNS INFO ============
+        insights["detected_columns"] = {
+            "money": money_col,
+            "quantity": qty_col,
+            "product": product_col,
+            "customer": customer_col,
+            "date": date_col
+        }
+
+        # ============ ADD GENERIC RECOMMENDATIONS ============
+        if not insights["recommendations"]:
+            insights["recommendations"].append(
+                "Upload data with columns like 'product', 'customer', 'revenue', 'date' "
+                "to get the most actionable business insights."
+            )
+
+        if money_col and product_col:
+            insights["recommendations"].append(
+                f"Focus on growing your top {product_col.lower()}s — they drive most of your {money_col.lower()}."
+            )
+
         return insights
 
     def get_full_analysis(self):
