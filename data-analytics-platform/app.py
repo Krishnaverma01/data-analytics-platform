@@ -417,8 +417,9 @@ def _get_analyzer(session_id):
 
 
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
     print("=" * 50)
     print("  Data Analytics Platform")
-    print("  Starting server on http://localhost:5000")
+    print(f"  Starting server on http://localhost:{port}")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
