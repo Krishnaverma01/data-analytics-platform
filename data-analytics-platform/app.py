@@ -42,7 +42,7 @@ class NumpyEncoder(json.JSONEncoder):
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
-app.json_encoder = NumpyEncoder
+# NumpyEncoder handled by _sanitize_for_json() below
 # Allow cross-origin requests from any frontend host (needed for split hosting)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
@@ -144,6 +144,10 @@ def analyze_data():
         # Store analyzer for subsequent requests
         analysis_sessions[session_id]["analyzer"] = analyzer
         analysis_sessions[session_id]["full_analysis"] = results
+
+        # Also generate business insights
+        business = analyzer.get_business_insights()
+        results["business_insights"] = business
 
         return jsonify(_sanitize_for_json(results))
 
@@ -417,9 +421,8 @@ def _get_analyzer(session_id):
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
     print("=" * 50)
     print("  Data Analytics Platform")
-    print(f"  Starting server on http://localhost:{port}")
+    print("  Starting server on http://localhost:5000")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
