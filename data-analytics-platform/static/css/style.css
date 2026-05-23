@@ -1341,6 +1341,11 @@ body {
 }
 
 /* ============ INFO MODAL POPUP ============ */
+.trend-banner {
+    padding: 4px 0;
+}
+
+/* ============ INFO MODAL POPUP ============ */
 .modal-overlay {
     position: fixed;
     inset: 0;
