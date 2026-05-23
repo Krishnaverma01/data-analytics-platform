@@ -265,6 +265,7 @@ const App = {
 
     // ============ RENDER ALL SECTIONS ============
     renderAllSections(data) {
+        this.renderDashboard(data.business_insights);
         this.renderOverview(data.overview);
         this.renderCorrelations(data.correlations);
         this.renderDistributions(data.distributions);
@@ -272,6 +273,286 @@ const App = {
         this.renderProblems(data.problems, data.solutions);
         this.renderFeatures(data.feature_suggestions);
         this.renderClustering(data.clustering);
+    },
+
+    // ============ BUSINESS DASHBOARD ============
+    renderDashboard(bi) {
+        if (!bi) return;
+
+        const chartColors = [
+            '#4F46E5', '#7C3AED', '#EC4899', '#F59E0B', '#10B981',
+            '#3B82F6', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16'
+        ];
+
+        // Summary cards
+        const summaryDiv = document.getElementById('dashSummary');
+        const summaryItems = bi.summary || [];
+        const metrics = bi.key_metrics || {};
+        const detected = bi.detected_columns || {};
+
+        let summaryHtml = '';
+        summaryItems.forEach(s => {
+            summaryHtml += `<div class="metric-card info"><div class="metric-label" style="font-size:0.85rem;line-height:1.5;">${s}</div></div>`;
+        });
+        if (metrics.total_revenue) {
+            summaryHtml += `<div class="metric-card success"><div class="metric-value">${metrics.total_revenue.toLocaleString()}</div><div class="metric-label">Total ${detected.money || 'Revenue'}</div></div>`;
+        }
+        if (metrics.average_revenue) {
+            summaryHtml += `<div class="metric-card"><div class="metric-value">${metrics.average_revenue.toLocaleString()}</div><div class="metric-label">Average ${detected.money || 'Revenue'}</div></div>`;
+        }
+        summaryDiv.innerHTML = summaryHtml;
+
+        // Trend banner
+        const trends = bi.trends || {};
+        if (trends.direction) {
+            const banner = document.getElementById('dashTrendBanner');
+            banner.style.display = 'block';
+            const isUp = trends.direction === 'increasing';
+            const isDown = trends.direction === 'decreasing';
+            const icon = isUp ? 'fa-arrow-trend-up' : isDown ? 'fa-arrow-trend-down' : 'fa-minus';
+            const color = isUp ? 'var(--accent-green)' : isDown ? 'var(--accent-red)' : 'var(--accent-amber)';
+            const label = isUp ? 'Going Up' : isDown ? 'Going Down' : 'Stable';
+            document.getElementById('dashTrendBannerContent').innerHTML = `
+                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <i class="fas ${icon}" style="font-size:1.5rem;color:${color};"></i>
+                        <span style="font-size:1.2rem;font-weight:700;color:${color};">${label}</span>
+                    </div>
+                    <span style="font-size:1rem;color:var(--text-secondary);">
+                        ${(detected.money || 'Revenue').title()} is <strong>${trends.direction}</strong>
+                        (${trends.change_percent > 0 ? '+' : ''}${trends.change_percent}% change)
+                    </span>
+                    ${trends.best_period ? `<span style="font-size:0.85rem;color:var(--text-tertiary);margin-left:auto;">Best: ${trends.best_period.period} | Worst: ${trends.worst_period.period}</span>` : ''}
+                </div>
+            `;
+        }
+
+        // Trend line chart
+        if (trends.data) {
+            document.getElementById('dashTrendCard').style.display = 'block';
+            document.getElementById('dashTrendTitle').textContent =
+                `${(detected.money || 'Value').title()} Over Time (${trends.data.period_label})`;
+
+            const ctx = document.getElementById('dashTrendChart').getContext('2d');
+            if (this._dashTrendChart) this._dashTrendChart.destroy();
+            this._dashTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: trends.data.labels,
+                    datasets: [{
+                        label: detected.money || 'Total',
+                        data: trends.data.values,
+                        borderColor: '#4F46E5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#4F46E5'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: false, grid: { color: 'rgba(0,0,0,0.05)' } },
+                        x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+                    }
+                }
+            });
+        }
+
+        // Top products bar chart + table
+        const topItems = bi.top_items || {};
+        if (topItems.by_revenue) {
+            const products = topItems.by_revenue;
+            document.getElementById('dashTopProductsCard').style.display = 'block';
+            document.getElementById('dashTopProductsTitle').textContent = `Top ${detected.product || 'Products'} by ${(detected.money || 'Revenue').title()}`;
+
+            const ctx = document.getElementById('dashTopProductsChart').getContext('2d');
+            if (this._dashProdChart) this._dashProdChart.destroy();
+            this._dashProdChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: products.map(p => p.name.length > 15 ? p.name.substring(0,15)+'...' : p.name),
+                    datasets: [{
+                        label: detected.money || 'Revenue',
+                        data: products.map(p => p.total),
+                        backgroundColor: chartColors.slice(0, products.length),
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(0,0,0,0.05)' } },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // Products table
+            document.getElementById('dashProductsTable').style.display = 'block';
+            document.getElementById('dashProductsTableTitle').textContent = `${(detected.product || 'Product').title()} Details`;
+            document.getElementById('dashProductsThead').innerHTML = `
+                <tr><th>${(detected.product || 'Product').title()}</th><th>Total ${(detected.money || 'Revenue').title()}</th><th>Average</th><th>Orders</th><th>Share</th></tr>`;
+            document.getElementById('dashProductsTbody').innerHTML = products.map(p => `
+                <tr>
+                    <td><strong>${p.name}</strong></td>
+                    <td>${p.total.toLocaleString()}</td>
+                    <td>${p.average.toLocaleString()}</td>
+                    <td>${p.count}</td>
+                    <td><span style="color:${p.percentage > 20 ? 'var(--accent-green)' : 'var(--text-secondary)'};font-weight:600;">${p.percentage}%</span></td>
+                </tr>
+            `).join('');
+
+        } else if (topItems.by_quantity) {
+            const products = topItems.by_quantity;
+            document.getElementById('dashTopProductsCard').style.display = 'block';
+            document.getElementById('dashTopProductsTitle').textContent = `Top ${detected.product || 'Products'} by Quantity`;
+
+            const ctx = document.getElementById('dashTopProductsChart').getContext('2d');
+            if (this._dashProdChart) this._dashProdChart.destroy();
+            this._dashProdChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: products.map(p => p.name.length > 15 ? p.name.substring(0,15)+'...' : p.name),
+                    datasets: [{
+                        label: 'Quantity',
+                        data: products.map(p => p.quantity),
+                        backgroundColor: chartColors.slice(0, products.length),
+                        borderRadius: 6
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+
+            document.getElementById('dashProductsTable').style.display = 'block';
+            document.getElementById('dashProductsTableTitle').textContent = `${(detected.product || 'Product').title()} Details`;
+            document.getElementById('dashProductsThead').innerHTML = `<tr><th>${(detected.product || 'Product').title()}</th><th>Quantity</th><th>Transactions</th></tr>`;
+            document.getElementById('dashProductsTbody').innerHTML = products.map(p => `<tr><td><strong>${p.name}</strong></td><td>${p.quantity.toLocaleString()}</td><td>${p.transactions}</td></tr>`).join('');
+
+        } else if (topItems.by_frequency) {
+            const items = topItems.by_frequency;
+            document.getElementById('dashTopProductsCard').style.display = 'block';
+            document.getElementById('dashTopProductsTitle').textContent = `Top ${(detected.product || 'Items').title()} by Count`;
+
+            const ctx = document.getElementById('dashTopProductsChart').getContext('2d');
+            if (this._dashProdChart) this._dashProdChart.destroy();
+            this._dashProdChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: items.map(p => p.name.length > 15 ? p.name.substring(0,15)+'...' : p.name),
+                    datasets: [{ label: 'Count', data: items.map(p => p.count), backgroundColor: chartColors.slice(0, items.length), borderRadius: 6 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+        }
+
+        // Revenue share pie chart
+        const comparisons = bi.comparisons || {};
+        if (comparisons.revenue_share) {
+            document.getElementById('dashPieCard').style.display = 'block';
+            const ctx = document.getElementById('dashPieChart').getContext('2d');
+            if (this._dashPieChart) this._dashPieChart.destroy();
+            this._dashPieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: comparisons.revenue_share.map(c => c.name),
+                    datasets: [{
+                        data: comparisons.revenue_share.map(c => c.value),
+                        backgroundColor: chartColors.slice(0, comparisons.revenue_share.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, padding: 10 } },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${comparisons.revenue_share[ctx.dataIndex].percentage}%)`
+                            }
+                        }
+                    }
+                }
+            });
+        } else if (comparisons.category_share) {
+            document.getElementById('dashPieCard').style.display = 'block';
+            const ctx = document.getElementById('dashPieChart').getContext('2d');
+            if (this._dashPieChart) this._dashPieChart.destroy();
+            this._dashPieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: comparisons.category_share.map(c => c.name),
+                    datasets: [{ data: comparisons.category_share.map(c => c.value), backgroundColor: chartColors.slice(0, comparisons.category_share.length), borderWidth: 2, borderColor: '#fff' }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 10 } } } }
+            });
+        }
+
+        // Top customers
+        if (topItems.by_customer) {
+            const customers = topItems.by_customer;
+            document.getElementById('dashTopCustomersCard').style.display = 'block';
+
+            const ctx = document.getElementById('dashTopCustomersChart').getContext('2d');
+            if (this._dashCustChart) this._dashCustChart.destroy();
+            this._dashCustChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: customers.map(c => c.name.length > 15 ? c.name.substring(0,15)+'...' : c.name),
+                    datasets: [{
+                        label: detected.money || 'Revenue',
+                        data: customers.map(c => c.total),
+                        backgroundColor: '#7C3AED',
+                        borderRadius: 6
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+
+            // Customers table
+            document.getElementById('dashCustomersTable').style.display = 'block';
+            document.getElementById('dashCustomersThead').innerHTML = `
+                <tr><th>${(detected.customer || 'Customer').title()}</th><th>Total Spent</th><th>Avg Order</th><th>Orders</th><th>Share</th></tr>`;
+            document.getElementById('dashCustomersTbody').innerHTML = customers.map(c => `
+                <tr>
+                    <td><strong>${c.name}</strong></td>
+                    <td>${c.total.toLocaleString()}</td>
+                    <td>${c.average.toLocaleString()}</td>
+                    <td>${c.count}</td>
+                    <td><span style="color:${c.percentage > 15 ? 'var(--accent-green)' : 'var(--text-secondary)'};font-weight:600;">${c.percentage}%</span></td>
+                </tr>
+            `).join('');
+        } else if (topItems.by_customer_freq) {
+            const customers = topItems.by_customer_freq;
+            document.getElementById('dashTopCustomersCard').style.display = 'block';
+            const ctx = document.getElementById('dashTopCustomersChart').getContext('2d');
+            if (this._dashCustChart) this._dashCustChart.destroy();
+            this._dashCustChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: customers.map(c => c.name.length > 15 ? c.name.substring(0,15)+'...' : c.name),
+                    datasets: [{ label: 'Orders', data: customers.map(c => c.count), backgroundColor: '#7C3AED', borderRadius: 6 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+        }
+
+        // Recommendations
+        const recs = bi.recommendations || [];
+        if (recs.length > 0) {
+            document.getElementById('dashRecommendations').style.display = 'block';
+            document.getElementById('dashRecommendationsBody').innerHTML = recs.map(r =>
+                `<div class="insight-item"><i class="fas fa-chart-line"></i><p>${r}</p></div>`
+            ).join('');
+        }
     },
 
     // ============ OVERVIEW SECTION ============
