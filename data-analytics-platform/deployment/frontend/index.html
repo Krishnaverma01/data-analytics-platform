@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataLens - Analytics Platform</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+    <!--
+    ============================================================
+    DEPLOYMENT INSTRUCTIONS:
+    ============================================================
+    1. Change the API_URL below to your PythonAnywhere backend URL
+       Example: const API_URL = 'https://yourusername.pythonanywhere.com';
+    2. Upload this file (along with style.css, app.js, charts.js) to
+       your InfinityFree hosting via their File Manager or FTP
+    3. Keep all CSS/JS files in the same directory as this HTML file
+       OR update the paths below
+    ============================================================
+    -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Backend API URL - CHANGE THIS TO YOUR PYTHONANYWHERE URL -->
+    <script>
+        // ============================================================
+        // CONFIGURATION: Set your PythonAnywhere backend URL here
+        // ============================================================
+        const API_URL = 'https://yourusername.pythonanywhere.com';
+        // Example: const API_URL = 'https://johndoe.pythonanywhere.com';
+        // For local testing: const API_URL = 'http://localhost:5000';
+        // ============================================================
+    </script>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <i class="fas fa-chart-line"></i>
+                <span>DataLens</span>
+            </div>
+            <button class="sidebar-toggle" id="sidebarToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-section="upload">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span>Upload Data</span>
+            </a>
+            <a href="#" class="nav-item" data-section="overview">
+                <i class="fas fa-th-large"></i>
+                <span>Overview</span>
+            </a>
+            <a href="#" class="nav-item" data-section="correlations">
+                <i class="fas fa-project-diagram"></i>
+                <span>Correlations</span>
+            </a>
+            <a href="#" class="nav-item" data-section="distributions">
+                <i class="fas fa-chart-bar"></i>
+                <span>Distributions</span>
+            </a>
+            <a href="#" class="nav-item" data-section="anomalies">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Anomalies</span>
+            </a>
+            <a href="#" class="nav-item" data-section="predictions">
+                <i class="fas fa-brain"></i>
+                <span>Predictions</span>
+            </a>
+            <a href="#" class="nav-item" data-section="problems">
+                <i class="fas fa-bug"></i>
+                <span>Problems</span>
+            </a>
+            <a href="#" class="nav-item" data-section="features">
+                <i class="fas fa-lightbulb"></i>
+                <span>Features</span>
+            </a>
+            <a href="#" class="nav-item" data-section="clustering">
+                <i class="fas fa-object-group"></i>
+                <span>Clustering</span>
+            </a>
+            <a href="#" class="nav-item" data-section="report">
+                <i class="fas fa-file-pdf"></i>
+                <span>Report</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="session-info" id="sessionInfo">
+                <i class="fas fa-database"></i>
+                <span>No data loaded</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="topbar-title" id="topbarTitle">Upload Data</div>
+            <div class="topbar-actions">
+                <button class="btn btn-icon" id="themeToggle" title="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="btn btn-primary btn-sm" id="runFullAnalysis" style="display:none;">
+                    <i class="fas fa-play"></i> Run Analysis
+                </button>
+            </div>
+        </header>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p id="loadingText">Analyzing your data...</p>
+            </div>
+        </div>
+
+        <!-- Section: Upload -->
+        <section class="section active" id="section-upload">
+            <div class="upload-container">
+                <div class="upload-hero">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <h1>Upload Your Data</h1>
+                    <p>Upload a CSV, Excel, JSON, or TSV file to begin comprehensive analysis</p>
+                </div>
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.json,.tsv" hidden>
+                    <div class="upload-zone-content">
+                        <i class="fas fa-file-csv"></i>
+                        <p>Drag & drop your file here</p>
+                        <span>or click to browse</span>
+                        <div class="upload-formats">
+                            <span class="format-tag">CSV</span>
+                            <span class="format-tag">XLSX</span>
+                            <span class="format-tag">JSON</span>
+                            <span class="format-tag">TSV</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="upload-progress" id="uploadProgress" style="display:none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p id="uploadStatus">Uploading...</p>
+                </div>
+                <div class="data-preview" id="dataPreview" style="display:none;">
+                    <h3>Data Preview</h3>
+                    <div class="preview-info" id="previewInfo"></div>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="previewTable">
+                            <thead id="previewThead"></thead>
+                            <tbody id="previewTbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="preview-actions">
+                        <button class="btn btn-primary" id="startAnalysis">
+                            <i class="fas fa-rocket"></i> Start Full Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section: Overview -->
+        <section class="section" id="section-overview">
+            <div class="section-header"><h2>Data Overview</h2><p class="section-desc">Comprehensive summary of your dataset</p></div>
+            <div class="metrics-grid" id="overviewMetrics"></div>
+            <div class="cards-grid">
+                <div class="card"><div class="card-header"><h3>Column Types Distribution</h3></div><div class="card-body"><canvas id="columnTypesChart"></canvas></div></div>
+                <div class="card"><div class="card-header"><h3>Data Quality Score</h3></div><div class="card-body"><canvas id="qualityScoreChart"></canvas></div></div>
+            </div>
+            <div class="card"><div class="card-header"><h3>Column Details</h3><div class="card-actions"><input type="text" class="search-input" id="columnSearch" placeholder="Search columns..."></div></div><div class="card-body"><div class="table-wrapper"><table class="data-table" id="columnDetailsTable"><thead><tr><th>Column</th><th>Type</th><th>Non-Null</th><th>Null %</th><th>Unique</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th></tr></thead><tbody id="columnDetailsBody"></tbody></table></div></div></div>
+        </section>
+
+        <!-- Section: Correlations -->
+        <section class="section" id="section-correlations">
+            <div class="section-header"><h2>Correlation Analysis</h2><p class="section-desc">Discover relationships between variables</p></div>
+            <div class="card"><div class="card-header"><h3>Correlation Heatmap</h3></div><div class="card-body chart-container"><canvas id="correlationHeatmap"></canvas></div></div>
+            <div class="card"><div class="card-header"><h3>Strongest Correlations</h3></div><div class="card-body"><div class="table-wrapper"><table class="data-table" id="correlationTable"><thead><tr><th>Variable 1</th><th>Variable 2</th><th>Correlation</th><th>Strength</th><th>Direction</th></tr></thead><tbody id="correlationBody"></tbody></table></div></div></div>
+            <div class="card"><div class="card-header"><h3>Key Insights</h3></div><div class="card-body" id="correlationInsights"></div></div>
+        </section>
+
+        <!-- Section: Distributions -->
+        <section class="section" id="section-distributions">
+            <div class="section-header"><h2>Distribution Analysis</h2><p class="section-desc">Statistical distributions and patterns in your data</p></div>
+            <div class="distribution-controls"><label>Select Column:</label><select id="distributionColumnSelect" class="select-input"></select></div>
+            <div class="cards-grid">
+                <div class="card card-wide"><div class="card-header"><h3>Histogram</h3></div><div class="card-body chart-container"><canvas id="distributionChart"></canvas></div></div>
+                <div class="card"><div class="card-header"><h3>Box Plot</h3></div><div class="card-body chart-container"><canvas id="boxPlotChart"></canvas></div></div>
+            </div>
+            <div class="card"><div class="card-header"><h3>Distribution Statistics</h3></div><div class="card-body" id="distributionStats"></div></div>
+        </section>
+
+        <!-- Section: Anomalies -->
+        <section class="section" id="section-anomalies">
+            <div class="section-header"><h2>Anomaly Detection</h2><p class="section-desc">Identify outliers and unusual patterns using Isolation Forest</p></div>
+            <div class="metrics-grid" id="anomalyMetrics"></div>
+            <div class="cards-grid"><div class="card card-wide"><div class="card-header"><h3>Anomaly Score Distribution</h3></div><div class="card-body chart-container"><canvas id="anomalyScoreChart"></canvas></div></div></div>
+            <div class="card"><div class="card-header"><h3>Anomaly Profile - Deviations by Column</h3></div><div class="card-body chart-container"><canvas id="anomalyProfileChart"></canvas></div></div>
+            <div class="card"><div class="card-header"><h3>Anomaly Insights</h3></div><div class="card-body" id="anomalyInsights"></div></div>
+        </section>
+
+        <!-- Section: Predictions -->
+        <section class="section" id="section-predictions">
+            <div class="section-header"><h2>Predictions & Forecasting</h2><p class="section-desc">ML-powered future value predictions</p></div>
+            <div class="prediction-controls">
+                <div class="control-group"><label>Target Variable:</label><select id="predictionTarget" class="select-input"></select></div>
+                <div class="control-group"><label>Forecast Periods:</label><input type="number" id="forecastPeriods" class="input-field" value="5" min="1" max="50"></div>
+                <button class="btn btn-primary" id="runPrediction"><i class="fas fa-magic"></i> Predict</button>
+            </div>
+            <div id="predictionResults"></div>
+        </section>
+
+        <!-- Section: Problems -->
+        <section class="section" id="section-problems">
+            <div class="section-header"><h2>Problems & Solutions</h2><p class="section-desc">Identified issues and recommended fixes</p></div>
+            <div class="metrics-grid" id="problemMetrics"></div>
+            <div class="problems-list" id="problemsList"></div>
+            <div class="solutions-list" id="solutionsList"></div>
+        </section>
+
+        <!-- Section: Features -->
+        <section class="section" id="section-features">
+            <div class="section-header"><h2>Feature Engineering</h2><p class="section-desc">Suggested new features to improve your models</p></div>
+            <div class="metrics-grid" id="featureMetrics"></div>
+            <div class="features-grid" id="featuresGrid"></div>
+        </section>
+
+        <!-- Section: Clustering -->
+        <section class="section" id="section-clustering">
+            <div class="section-header"><h2>Clustering Analysis</h2><p class="section-desc">Discover natural groupings in your data with K-Means</p></div>
+            <div class="clustering-controls">
+                <div class="control-group"><label>Number of Clusters (auto-detect if empty):</label><input type="number" id="clusterCount" class="input-field" placeholder="Auto" min="2" max="20"></div>
+                <button class="btn btn-primary" id="runClustering"><i class="fas fa-object-group"></i> Cluster</button>
+            </div>
+            <div class="cards-grid"><div class="card card-wide"><div class="card-header"><h3>PCA Cluster Visualization</h3></div><div class="card-body chart-container"><canvas id="clusterChart"></canvas></div></div></div>
+            <div class="card"><div class="card-header"><h3>Cluster Profiles</h3></div><div class="card-body" id="clusterProfiles"></div></div>
+        </section>
+
+        <!-- Section: Report -->
+        <section class="section" id="section-report">
+            <div class="section-header"><h2>Generate Report</h2><p class="section-desc">Download a comprehensive PDF analysis report</p></div>
+            <div class="report-container">
+                <div class="report-card">
+                    <div class="report-icon"><i class="fas fa-file-pdf"></i></div>
+                    <h3>Complete Analysis Report</h3>
+                    <p>Generate a professional PDF report including all analysis results, charts, predictions, problems, solutions, and recommendations.</p>
+                    <ul class="report-contents">
+                        <li><i class="fas fa-check"></i> Data Overview & Quality Metrics</li>
+                        <li><i class="fas fa-check"></i> Correlation Analysis with Heatmap</li>
+                        <li><i class="fas fa-check"></i> Distribution Statistics</li>
+                        <li><i class="fas fa-check"></i> Anomaly Detection Results</li>
+                        <li><i class="fas fa-check"></i> Problem Detection & Severity</li>
+                        <li><i class="fas fa-check"></i> ML Predictions & Forecasting</li>
+                        <li><i class="fas fa-check"></i> Feature Engineering Suggestions</li>
+                        <li><i class="fas fa-check"></i> Clustering Analysis</li>
+                    </ul>
+                    <button class="btn btn-primary btn-lg" id="generateReport"><i class="fas fa-download"></i> Generate & Download PDF Report</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts - load from same directory for InfinityFree static hosting -->
+    <script src="charts.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
