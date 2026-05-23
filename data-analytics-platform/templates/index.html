@@ -420,6 +420,35 @@
         </section>
     </main>
 
+    <!-- Info Popup Modal -->
+    <div class="modal-overlay" id="infoModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <i class="fas fa-exclamation-triangle modal-icon"></i>
+                <h2>Free Server Limits</h2>
+            </div>
+            <div class="modal-body">
+                <p>DataLens is hosted on a <strong>free server</strong> with limited resources. Please note:</p>
+                <ul class="modal-list">
+                    <li><i class="fas fa-file-alt"></i> File size limit: <strong>5 MB</strong></li>
+                    <li><i class="fas fa-table"></i> Row limit: <strong>5,000 rows</strong> for best performance</li>
+                    <li><i class="fas fa-clock"></i> First request may take <strong>30-50 seconds</strong> (cold start)</li>
+                    <li><i class="fas fa-memory"></i> 512 MB RAM &mdash; large datasets may crash</li>
+                    <li><i class="fas fa-hourglass-half"></i> Data is lost if server restarts &mdash; download reports quickly</li>
+                </ul>
+                <div class="modal-tip">
+                    <i class="fas fa-lightbulb"></i>
+                    <span>For best results, use <strong>CSV files under 2 MB</strong> with up to <strong>2,000 rows</strong>.</span>
+                </div>
+            </div>
+            <div class="modal-footer-center">
+                <button class="btn btn-primary" id="modalOk">
+                    <i class="fas fa-check"></i> OK, Got it!
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div class="toast-container" id="toastContainer"></div>
 
