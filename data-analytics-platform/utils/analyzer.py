@@ -233,59 +233,46 @@ class DataAnalyzer:
         except Exception:
             return {"test": "failed"}
 
-        def detect_anomalies(self):
+    def detect_anomalies(self):
         """Detect anomalies using Isolation Forest."""
-        try:
-            if len(self.numeric_cols) < 1:
-                return {"error": "Need at least 1 numeric column for anomaly detection"}
+        if len(self.numeric_cols) < 1:
+            return {"error": "Need at least 1 numeric column for anomaly detection"}
 
-            data = self.df[self.numeric_cols].dropna()
-            if len(data) < 10:
-                return {"error": "Need at least 10 rows for anomaly detection"}
+        data = self.df[self.numeric_cols].dropna()
+        if len(data) < 10:
+            return {"error": "Need at least 10 rows for anomaly detection"}
 
-            # Limit data size to prevent OOM on free hosting (512MB RAM)
-            max_rows = 5000
-            if len(data) > max_rows:
-                data = data.sample(n=max_rows, random_state=42)
+        contamination = min(0.1, max(0.01, 5 / len(data)))
+        iso_forest = IsolationForest(contamination=contamination, random_state=42, n_estimators=100)
+        predictions = iso_forest.fit_predict(data)
+        anomaly_scores = iso_forest.decision_function(data)
 
-            contamination = min(0.1, max(0.01, 5 / len(data)))
-            iso_forest = IsolationForest(
-                contamination=contamination,
-                random_state=42,
-                n_estimators=50,
-                max_samples='auto',
-                n_jobs=1
-            )
-            predictions = iso_forest.fit_predict(data)
-            anomaly_scores = iso_forest.decision_function(data)
+        anomaly_mask = predictions == -1
+        anomalies = data[anomaly_mask].copy()
+        normal = data[~anomaly_mask].copy()
 
-            anomaly_mask = predictions == -1
-            anomalies = data[anomaly_mask].copy()
-            normal = data[~anomaly_mask].copy()
+        anomaly_indices = data.index[anomaly_mask].tolist()
 
-            anomaly_indices = data.index[anomaly_mask].tolist()
+        # Analyze what makes anomalies different
+        anomaly_profile = {}
+        if len(anomalies) > 0:
+            for col in self.numeric_cols:
+                anomaly_profile[col] = {
+                    "normal_mean": round(float(normal[col].mean()), 4),
+                    "anomaly_mean": round(float(anomalies[col].mean()), 4),
+                    "deviation_pct": round(float(
+                        abs(anomalies[col].mean() - normal[col].mean()) / max(abs(normal[col].mean()), 1e-10) * 100
+                    ), 2)
+                }
 
-            anomaly_profile = {}
-            if len(anomalies) > 0:
-                for col in self.numeric_cols:
-                    anomaly_profile[col] = {
-                        "normal_mean": round(float(normal[col].mean()), 4),
-                        "anomaly_mean": round(float(anomalies[col].mean()), 4),
-                        "deviation_pct": round(float(
-                            abs(anomalies[col].mean() - normal[col].mean()) / max(abs(normal[col].mean()), 1e-10) * 100
-                        ), 2)
-                    }
-
-            return {
-                "total_anomalies": int(anomaly_mask.sum()),
-                "anomaly_percentage": round(float(anomaly_mask.mean() * 100), 2),
-                "anomaly_indices": anomaly_indices[:100],
-                "anomaly_scores": [round(float(s), 4) for s in anomaly_scores[:100]],
-                "anomaly_profile": anomaly_profile,
-                "insights": self._generate_anomaly_insights(anomaly_mask.sum(), len(data), anomaly_profile)
-            }
-        except Exception as e:
-            return {"error": f"Anomaly detection skipped: {str(e)}"}
+        return {
+            "total_anomalies": int(anomaly_mask.sum()),
+            "anomaly_percentage": round(float(anomaly_mask.mean() * 100), 2),
+            "anomaly_indices": anomaly_indices[:100],
+            "anomaly_scores": [round(float(s), 4) for s in anomaly_scores[:100]],
+            "anomaly_profile": anomaly_profile,
+            "insights": self._generate_anomaly_insights(anomaly_mask.sum(), len(data), anomaly_profile)
+        }
 
     def _generate_anomaly_insights(self, n_anomalies, total, profile):
         insights = []
