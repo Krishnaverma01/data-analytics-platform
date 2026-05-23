@@ -3,6 +3,12 @@
  * Connects HTML frontend with Python Flask backend
  */
 
+// Helper: JavaScript equivalent of Python's str.title()
+function titleCase(str) {
+    if (typeof str !== 'string') str = String(str);
+    return str.replace(/\b\w/g, c => c.toUpperCase());
+}
+
 const App = {
     sessionId: null,
     analysisData: {},
@@ -319,7 +325,7 @@ const App = {
                         <span style="font-size:1.2rem;font-weight:700;color:${color};">${label}</span>
                     </div>
                     <span style="font-size:1rem;color:var(--text-secondary);">
-                        ${(detected.money || 'Revenue').title()} is <strong>${trends.direction}</strong>
+                        ${titleCase(detected.money || 'Revenue')} is <strong>${trends.direction}</strong>
                         (${trends.change_percent > 0 ? '+' : ''}${trends.change_percent}% change)
                     </span>
                     ${trends.best_period ? `<span style="font-size:0.85rem;color:var(--text-tertiary);margin-left:auto;">Best: ${trends.best_period.period} | Worst: ${trends.worst_period.period}</span>` : ''}
@@ -331,7 +337,7 @@ const App = {
         if (trends.data) {
             document.getElementById('dashTrendCard').style.display = 'block';
             document.getElementById('dashTrendTitle').textContent =
-                `${(detected.money || 'Value').title()} Over Time (${trends.data.period_label})`;
+                `${titleCase(detected.money || 'Value')} Over Time (${trends.data.period_label})`;
 
             const ctx = document.getElementById('dashTrendChart').getContext('2d');
             if (this._dashTrendChart) this._dashTrendChart.destroy();
@@ -367,7 +373,7 @@ const App = {
         if (topItems.by_revenue) {
             const products = topItems.by_revenue;
             document.getElementById('dashTopProductsCard').style.display = 'block';
-            document.getElementById('dashTopProductsTitle').textContent = `Top ${detected.product || 'Products'} by ${(detected.money || 'Revenue').title()}`;
+            document.getElementById('dashTopProductsTitle').textContent = `Top ${detected.product || 'Products'} by ${titleCase(detected.money || 'Revenue')}`;
 
             const ctx = document.getElementById('dashTopProductsChart').getContext('2d');
             if (this._dashProdChart) this._dashProdChart.destroy();
@@ -396,9 +402,9 @@ const App = {
 
             // Products table
             document.getElementById('dashProductsTable').style.display = 'block';
-            document.getElementById('dashProductsTableTitle').textContent = `${(detected.product || 'Product').title()} Details`;
+            document.getElementById('dashProductsTableTitle').textContent = `${titleCase(detected.product || 'Product')} Details`;
             document.getElementById('dashProductsThead').innerHTML = `
-                <tr><th>${(detected.product || 'Product').title()}</th><th>Total ${(detected.money || 'Revenue').title()}</th><th>Average</th><th>Orders</th><th>Share</th></tr>`;
+                <tr><th>${titleCase(detected.product || 'Product')}</th><th>Total ${titleCase(detected.money || 'Revenue')}</th><th>Average</th><th>Orders</th><th>Share</th></tr>`;
             document.getElementById('dashProductsTbody').innerHTML = products.map(p => `
                 <tr>
                     <td><strong>${p.name}</strong></td>
@@ -431,14 +437,14 @@ const App = {
             });
 
             document.getElementById('dashProductsTable').style.display = 'block';
-            document.getElementById('dashProductsTableTitle').textContent = `${(detected.product || 'Product').title()} Details`;
-            document.getElementById('dashProductsThead').innerHTML = `<tr><th>${(detected.product || 'Product').title()}</th><th>Quantity</th><th>Transactions</th></tr>`;
+            document.getElementById('dashProductsTableTitle').textContent = `${titleCase(detected.product || 'Product')} Details`;
+            document.getElementById('dashProductsThead').innerHTML = `<tr><th>${titleCase(detected.product || 'Product')}</th><th>Quantity</th><th>Transactions</th></tr>`;
             document.getElementById('dashProductsTbody').innerHTML = products.map(p => `<tr><td><strong>${p.name}</strong></td><td>${p.quantity.toLocaleString()}</td><td>${p.transactions}</td></tr>`).join('');
 
         } else if (topItems.by_frequency) {
             const items = topItems.by_frequency;
             document.getElementById('dashTopProductsCard').style.display = 'block';
-            document.getElementById('dashTopProductsTitle').textContent = `Top ${(detected.product || 'Items').title()} by Count`;
+            document.getElementById('dashTopProductsTitle').textContent = `Top ${titleCase(detected.product || 'Items')} by Count`;
 
             const ctx = document.getElementById('dashTopProductsChart').getContext('2d');
             if (this._dashProdChart) this._dashProdChart.destroy();
@@ -520,7 +526,7 @@ const App = {
             // Customers table
             document.getElementById('dashCustomersTable').style.display = 'block';
             document.getElementById('dashCustomersThead').innerHTML = `
-                <tr><th>${(detected.customer || 'Customer').title()}</th><th>Total Spent</th><th>Avg Order</th><th>Orders</th><th>Share</th></tr>`;
+                <tr><th>${titleCase(detected.customer || 'Customer')}</th><th>Total Spent</th><th>Avg Order</th><th>Orders</th><th>Share</th></tr>`;
             document.getElementById('dashCustomersTbody').innerHTML = customers.map(c => `
                 <tr>
                     <td><strong>${c.name}</strong></td>
